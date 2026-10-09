@@ -1,25 +1,70 @@
 {
   "expo": {
-    "name": "neon-rift",
-    "slug": "neon-rift",
+    "name": "Orbit Breaker",
+    "slug": "orbit-breaker",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "icon": "./assets/orbit_breaker_icon.jpg",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/orbit_breaker_splash.jpg",
+      "resizeMode": "cover",
+      "backgroundColor": "#0B1020"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.dreamcall.orbitbreaker"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#0B1020"
       },
+      "package": "com.dreamcall.orbitbreaker",
+      "versionCode": 1,
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/orbit_breaker_icon.jpg"
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24,
+            "buildToolsVersion": "36.0.0"
+          }
+        }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-8540104953749120~6336194627",
+          "iosAppId": "ca-app-pub-8540104953749120~6336194627"
+        }
+      ],
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/orbit_breaker_splash.jpg",
+          "imageWidth": 200,
+          "resizeMode": "cover",
+          "backgroundColor": "#0B1020"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ccf389fa-73ae-4b78-a0d0-6c458f8a5062"
+      }
     }
+  },
+  "react-native-google-mobile-ads": {
+    "android_app_id": "ca-app-pub-8540104953749120~6336194627",
+    "ios_app_id": "ca-app-pub-8540104953749120~6336194627"
   }
 }
