@@ -7,8 +7,8 @@
     "icon": "./assets/orbit_breaker_icon.jpg",
     "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/orbit_breaker_splash.jpg",
-      "resizeMode": "cover",
+      "image": "./assets/orbit_breaker_splash.png",
+      "resizeMode": "contain",
       "backgroundColor": "#0B1020"
     },
     "ios": {
@@ -35,24 +35,27 @@
             "compileSdkVersion": 36,
             "targetSdkVersion": 35,
             "minSdkVersion": 24,
-            "buildToolsVersion": "36.0.0"
+            "buildToolsVersion": "36.0.0",
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "-keep class expo.modules.gl.** { *; }\n-keep interface expo.modules.gl.** { *; }\n-keepclasseswithmembernames class * { native <methods>; }\n-keep class com.facebook.react.turbomodule.** { *; }\n-keep class com.facebook.react.bridge.** { *; }\n-keep class com.google.android.gms.ads.** { *; }\n-keep class com.google.ads.** { *; }"
           }
         }
       ],
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-8540104953749120~6336194627",
-          "iosAppId": "ca-app-pub-8540104953749120~6336194627"
+          "androidAppId": "ca-app-pub-8540104953749120~3044299378",
+          "iosAppId": "ca-app-pub-8540104953749120~3044299378"
         }
       ],
       "expo-font",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/orbit_breaker_splash.jpg",
+          "image": "./assets/orbit_breaker_splash.png",
           "imageWidth": 200,
-          "resizeMode": "cover",
+          "resizeMode": "contain",
           "backgroundColor": "#0B1020"
         }
       ]
@@ -64,7 +67,7 @@
     }
   },
   "react-native-google-mobile-ads": {
-    "android_app_id": "ca-app-pub-8540104953749120~6336194627",
-    "ios_app_id": "ca-app-pub-8540104953749120~6336194627"
+    "android_app_id": "ca-app-pub-8540104953749120~3044299378",
+    "ios_app_id": "ca-app-pub-8540104953749120~3044299378"
   }
 }

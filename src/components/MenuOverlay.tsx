@@ -28,6 +28,7 @@ const COLORS = {
   accent: "#22D3EE",
   violet: "#8B5CF6",
   pink: "#F472B6",
+  green: "#34D399",
 };
 
 export const MenuOverlay: React.FC<MenuOverlayProps> = ({
@@ -78,7 +79,9 @@ export const MenuOverlay: React.FC<MenuOverlayProps> = ({
         {/* Header */}
         <View style={styles.headerBox}>
           <Text style={styles.title}>ORBIT BREAKER</Text>
-          <Text style={styles.tagline}>Space Brick Breaker Arcade · 50 Sectors</Text>
+          <Text style={styles.tagline}>
+            Space Brick Breaker Arcade · 50 Sectors
+          </Text>
         </View>
 
         {!showHowToPlay ? (
@@ -113,6 +116,19 @@ export const MenuOverlay: React.FC<MenuOverlayProps> = ({
               </View>
             </View>
 
+            {/* Quick Play Frontier Button */}
+            <TouchableOpacity
+              style={styles.continueBtn}
+              onPress={() => onStartGame(effectiveUnlocked)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.continueBtnText}>
+                {effectiveUnlocked > 1
+                  ? `▶ CONTINUE SECTOR ${effectiveUnlocked}`
+                  : `▶ PLAY SECTOR 1`}
+              </Text>
+            </TouchableOpacity>
+
             {/* How to play trigger */}
             <TouchableOpacity
               style={styles.linkBtn}
@@ -122,41 +138,83 @@ export const MenuOverlay: React.FC<MenuOverlayProps> = ({
               <Text style={styles.linkBtnText}>How to play & power-ups</Text>
             </TouchableOpacity>
 
-            {/* Sector grid */}
-            <Text style={styles.sectionHeader}>Choose a sector</Text>
+            {/* Sector grid header */}
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionHeader}>Choose a sector</Text>
+              <Text style={styles.sectionSubheader}>
+                {effectiveUnlocked > 1
+                  ? `${effectiveUnlocked - 1} cleared · tap to replay`
+                  : "50 sectors"}
+              </Text>
+            </View>
 
             <View style={styles.gridContainer}>
               {allSectors.map((sec) => {
-                const isUnlocked = sec.id <= effectiveUnlocked;
+                const isCompleted = sec.id < effectiveUnlocked;
                 const isCurrent = sec.id === effectiveUnlocked;
+                const isLocked = sec.id > effectiveUnlocked;
+                const isSelectable = !isLocked;
+
                 return (
                   <TouchableOpacity
                     key={sec.id}
                     style={[
                       styles.sectorTile,
+                      isCompleted && styles.sectorTileCompleted,
                       isCurrent && styles.sectorTileCurrent,
-                      !isUnlocked && styles.sectorTileLocked,
+                      isLocked && styles.sectorTileLocked,
                     ]}
                     onPress={() => {
-                      if (isUnlocked) {
+                      if (isSelectable) {
                         onStartGame(sec.id);
                       }
                     }}
-                    activeOpacity={isUnlocked ? 0.7 : 1.0}
+                    activeOpacity={isSelectable ? 0.7 : 1.0}
+                    disabled={isLocked}
                   >
+                    <View style={styles.tileBadgeRow}>
+                      <Text
+                        style={[
+                          styles.tileNum,
+                          {
+                            color: isLocked
+                              ? COLORS.muted
+                              : isCurrent
+                              ? COLORS.accent
+                              : sec.theme,
+                          },
+                        ]}
+                      >
+                        {isLocked ? "🔒" : sec.id}
+                      </Text>
+                      {isCompleted && (
+                        <View style={styles.completedBadge}>
+                          <Text style={styles.completedBadgeText}>✓</Text>
+                        </View>
+                      )}
+                      {isCurrent && (
+                        <View style={styles.currentBadge}>
+                          <Text style={styles.currentBadgeText}>★</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <Text style={styles.tilePlanet} numberOfLines={1}>
+                      {isLocked ? `Sector ${sec.id}` : sec.planetName}
+                    </Text>
+
                     <Text
                       style={[
-                        styles.tileNum,
-                        { color: isUnlocked ? sec.theme : COLORS.muted },
+                        styles.tileBricks,
+                        isCompleted && styles.tileBricksCompleted,
+                        isCurrent && styles.tileBricksCurrent,
                       ]}
                     >
-                      {isUnlocked ? sec.id : "🔒"}
-                    </Text>
-                    <Text style={styles.tilePlanet} numberOfLines={1}>
-                      {isUnlocked ? sec.planetName : `Sector ${sec.id}`}
-                    </Text>
-                    <Text style={styles.tileBricks}>
-                      {isUnlocked ? `${sec.brickCount} bricks` : "Locked"}
+                      {isLocked
+                        ? "Locked"
+                        : isCompleted
+                        ? "Replay"
+                        : "Current"}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -324,6 +382,24 @@ const styles = StyleSheet.create({
   },
 
   /* Buttons */
+  continueBtn: {
+    backgroundColor: COLORS.accent,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+    marginBottom: 8,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 10,
+    shadowOpacity: 0.4,
+    elevation: 5,
+  },
+  continueBtnText: {
+    color: COLORS.base,
+    fontFamily: FONTS.orbitronBold,
+    fontSize: 14,
+    letterSpacing: 0.8,
+  },
   primaryBtn: {
     backgroundColor: COLORS.accent,
     paddingVertical: 15,
@@ -353,11 +429,21 @@ const styles = StyleSheet.create({
   },
 
   /* Sector grid */
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    marginBottom: 12,
+  },
   sectionHeader: {
     color: COLORS.text,
     fontFamily: FONTS.orbitronBold,
     fontSize: 15,
-    marginBottom: 12,
+  },
+  sectionSubheader: {
+    color: COLORS.muted,
+    fontFamily: FONTS.rajdhaniMedium,
+    fontSize: 12,
   },
   gridContainer: {
     flexDirection: "row",
@@ -375,12 +461,50 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     alignItems: "center",
   },
+  sectorTileCompleted: {
+    borderColor: "rgba(52, 211, 153, 0.45)",
+    backgroundColor: "rgba(52, 211, 153, 0.06)",
+  },
   sectorTileCurrent: {
     borderColor: COLORS.accent,
     backgroundColor: "rgba(34, 211, 238, 0.10)",
   },
   sectorTileLocked: {
     opacity: 0.4,
+  },
+  tileBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  completedBadge: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: COLORS.green,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  completedBadgeText: {
+    color: COLORS.base,
+    fontSize: 9,
+    fontFamily: FONTS.orbitronBold,
+    lineHeight: 11,
+  },
+  currentBadge: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: COLORS.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  currentBadgeText: {
+    color: COLORS.base,
+    fontSize: 9,
+    fontFamily: FONTS.orbitronBold,
+    lineHeight: 11,
   },
   tileNum: {
     fontFamily: FONTS.orbitronBold,
@@ -395,6 +519,18 @@ const styles = StyleSheet.create({
   tileBricks: {
     color: COLORS.muted,
     fontSize: 10,
+    marginTop: 2,
+  },
+  tileBricksCompleted: {
+    color: COLORS.green,
+    fontFamily: FONTS.rajdhaniSemiBold,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  tileBricksCurrent: {
+    color: COLORS.accent,
+    fontFamily: FONTS.rajdhaniBold,
+    fontSize: 11,
     marginTop: 2,
   },
 

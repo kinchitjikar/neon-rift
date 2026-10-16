@@ -39,24 +39,24 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
   const destroyedBricks = Math.min(totalBricks, Math.floor(score / 150));
 
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          paddingTop: Math.max(insets.top, 16),
-        },
-      ]}
-      pointerEvents="box-none"
-    >
-      {/* Top Glass Sci-Fi Header Frame */}
-      <View style={styles.topHeaderFrame}>
-        {/* Row 1: Navigation, Sector Title & Controls */}
-        <View style={styles.headerTopRow}>
+    <View style={styles.container} pointerEvents="box-none">
+      {/* Top Header Frame: Navigation, Sector Title & Controls */}
+      <View
+        style={[
+          styles.topControlsWrapper,
+          {
+            paddingTop: Math.max(insets.top, 10),
+          },
+        ]}
+        pointerEvents="box-none"
+      >
+        <View style={styles.topHeaderFrame}>
           <View style={styles.leftMeta}>
             <TouchableOpacity
               style={styles.closeBtn}
               onPress={onClose}
               activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Text style={styles.closeBtnText}>✖</Text>
             </TouchableOpacity>
@@ -79,6 +79,7 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
               style={styles.iconBtn}
               onPress={onToggleSound}
               activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
             >
               <Text style={styles.btnText}>{soundEnabled ? "🔊" : "🔇"}</Text>
             </TouchableOpacity>
@@ -86,6 +87,7 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
               style={styles.iconBtn}
               onPress={onPauseToggle}
               activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
             >
               <Text style={styles.btnText}>
                 {gameStatus === "PAUSED" ? "▶" : "❚❚"}
@@ -93,9 +95,19 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
             </TouchableOpacity>
           </View>
         </View>
+      </View>
 
-        {/* Row 2: Target Badge, Prominent Score & Combo Pill */}
-        <View style={styles.statsRow}>
+      {/* Bottom Glass Sci-Fi Score Card: Target, Prominent Score & Combo Pill */}
+      <View
+        style={[
+          styles.bottomScoreCardWrapper,
+          {
+            paddingBottom: Math.max(insets.bottom, 12),
+          },
+        ]}
+        pointerEvents="box-none"
+      >
+        <View style={styles.scoreCardFrame} pointerEvents="none">
           <View style={styles.targetBadge}>
             <Text style={styles.targetLabel}>TARGET</Text>
             <Text style={styles.targetValue}>
@@ -126,21 +138,21 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFill,
+    justifyContent: "space-between",
+  },
+  topControlsWrapper: {
     paddingHorizontal: 12,
   },
   topHeaderFrame: {
-    backgroundColor: "rgba(11, 16, 32, 0.94)",
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.line,
-    gap: 6,
-  },
-  headerTopRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    backgroundColor: "rgba(11, 16, 32, 0.88)",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
   },
   leftMeta: {
     flexDirection: "row",
@@ -197,22 +209,30 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 11,
   },
-  statsRow: {
+  bottomScoreCardWrapper: {
+    paddingHorizontal: 12,
+  },
+  scoreCardFrame: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "rgba(3, 7, 18, 0.60)",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 10,
+    backgroundColor: "rgba(11, 16, 32, 0.94)",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.05)",
+    borderColor: "rgba(34, 211, 238, 0.25)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 6,
   },
   targetBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    minWidth: 90,
+    minWidth: 85,
   },
   targetLabel: {
     color: COLORS.muted,
@@ -241,7 +261,7 @@ const styles = StyleSheet.create({
   scoreValue: {
     color: COLORS.gold,
     fontFamily: FONTS.orbitronBold,
-    fontSize: 12,
+    fontSize: 13,
   },
   rightStatContainer: {
     minWidth: 60,

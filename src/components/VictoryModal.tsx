@@ -6,21 +6,29 @@ import { COLORS, FONTS } from '../config/theme';
 interface VictoryModalProps {
   score: number;
   levelId: number;
+  unlockedLevel?: number;
+  isReplay?: boolean;
   onNextLevel: () => void;
+  onResumeFrontier?: () => void;
   onMenu: () => void;
 }
 
 export const VictoryModal: React.FC<VictoryModalProps> = ({
   score,
   levelId,
+  unlockedLevel = 1,
+  isReplay = false,
   onNextLevel,
+  onResumeFrontier,
   onMenu,
 }) => {
   const insets = useSafeAreaInsets();
+  const canResumeFrontier = isReplay && unlockedLevel > levelId + 1 && onResumeFrontier;
+
   return (
     <View style={[styles.overlay, { paddingTop: Math.max(insets.top, 24), paddingBottom: Math.max(insets.bottom + 20, 36) }]}>
       <View style={styles.card}>
-        <Text style={styles.subtitle}>SECTOR CLEARED</Text>
+        <Text style={styles.subtitle}>{isReplay ? 'SECTOR REPLAY CLEARED' : 'SECTOR CLEARED'}</Text>
         <Text style={styles.title}>Sector {levelId} Complete!</Text>
 
         <View style={styles.scoreContainer}>
@@ -28,9 +36,21 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           <Text style={styles.scoreValue}>{score.toLocaleString()}</Text>
         </View>
 
-        <TouchableOpacity style={styles.nextBtn} onPress={onNextLevel} activeOpacity={0.85}>
-          <Text style={styles.nextText}>Next Sector ▶</Text>
-        </TouchableOpacity>
+        {levelId < 50 ? (
+          <TouchableOpacity style={styles.nextBtn} onPress={onNextLevel} activeOpacity={0.85}>
+            <Text style={styles.nextText}>Next Sector ({levelId + 1}) ▶</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.nextBtn} onPress={onMenu} activeOpacity={0.85}>
+            <Text style={styles.nextText}>All Sectors Conquered! Return to Menu ▶</Text>
+          </TouchableOpacity>
+        )}
+
+        {canResumeFrontier && (
+          <TouchableOpacity style={styles.frontierBtn} onPress={onResumeFrontier} activeOpacity={0.85}>
+            <Text style={styles.frontierText}>Resume Sector {unlockedLevel} ★</Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity style={styles.menuBtn} onPress={onMenu} activeOpacity={0.7}>
           <Text style={styles.menuText}>Back to Main Menu</Text>
@@ -102,6 +122,22 @@ const styles = StyleSheet.create({
     color: COLORS.base,
     fontFamily: FONTS.orbitronBold,
     fontSize: 14,
+  },
+  frontierBtn: {
+    backgroundColor: 'rgba(52, 211, 153, 0.15)',
+    borderWidth: 1,
+    borderColor: COLORS.green,
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  frontierText: {
+    color: COLORS.green,
+    fontFamily: FONTS.orbitronBold,
+    fontSize: 13,
+    letterSpacing: 1,
   },
   menuBtn: {
     width: '100%',

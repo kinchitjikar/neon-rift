@@ -1,23 +1,36 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import * as SplashScreen from 'expo-splash-screen';
-import { GameStatus, LevelConfig, PowerUpType } from './src/types/game';
-import { generateLevel } from './src/game/levels';
-import { GameCanvas } from './src/components/GameCanvas';
-import { HUDOverlay } from './src/components/HUDOverlay';
-import { MenuOverlay } from './src/components/MenuOverlay';
-import { GameOverModal } from './src/components/GameOverModal';
-import { VictoryModal } from './src/components/VictoryModal';
-import { RewardedContinueModal } from './src/components/RewardedContinueModal';
-import { soundManager } from './src/audio/soundManager';
-import { adManager } from './src/utils/adManager';
-import { storageManager } from './src/utils/storage';
-import { ADS_CONFIG } from './src/config/ads';
-import { useFonts, Orbitron_400Regular, Orbitron_700Bold, Orbitron_900Black } from '@expo-google-fonts/orbitron';
-import { Rajdhani_500Medium, Rajdhani_600SemiBold, Rajdhani_700Bold } from '@expo-google-fonts/rajdhani';
-import { FONTS } from './src/config/theme';
+import React, { useCallback, useEffect, useState } from "react";
+import { StyleSheet } from "react-native";
+import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import * as SplashScreen from "expo-splash-screen";
+import { GameStatus, LevelConfig, PowerUpType } from "./src/types/game";
+import { generateLevel } from "./src/game/levels";
+import { GameCanvas } from "./src/components/GameCanvas";
+import { HUDOverlay } from "./src/components/HUDOverlay";
+import { MenuOverlay } from "./src/components/MenuOverlay";
+import { GameOverModal } from "./src/components/GameOverModal";
+import { VictoryModal } from "./src/components/VictoryModal";
+import { RewardedContinueModal } from "./src/components/RewardedContinueModal";
+import { soundManager } from "./src/audio/soundManager";
+import { adManager } from "./src/utils/adManager";
+import { storageManager } from "./src/utils/storage";
+import { ADS_CONFIG } from "./src/config/ads";
+import {
+  useFonts,
+  Orbitron_400Regular,
+  Orbitron_700Bold,
+  Orbitron_900Black,
+} from "@expo-google-fonts/orbitron";
+import {
+  Rajdhani_500Medium,
+  Rajdhani_600SemiBold,
+  Rajdhani_700Bold,
+} from "@expo-google-fonts/rajdhani";
+import { FONTS } from "./src/config/theme";
+import {
+  getRandomWallpaperIndex,
+  getWallpaperByIndex,
+} from "./src/config/wallpapers";
 
 // Keep the native splash screen visible until we explicitly hide it
 SplashScreen.preventAutoHideAsync();
@@ -31,10 +44,14 @@ export default function App() {
     Rajdhani_600SemiBold,
     Rajdhani_700Bold,
   });
-  const [gameStatus, setGameStatus] = useState<GameStatus>('MENU');
+  const [gameStatus, setGameStatus] = useState<GameStatus>("MENU");
   const [currentLevelId, setCurrentLevelId] = useState(1);
   const [unlockedLevel, setUnlockedLevel] = useState(1);
   const [levelConfig, setLevelConfig] = useState<LevelConfig>(generateLevel(1));
+  const [gameSessionId, setGameSessionId] = useState(0);
+  const [wallpaperIndex, setWallpaperIndex] = useState<number>(() =>
+    getRandomWallpaperIndex()
+  );
 
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(12500);
@@ -44,8 +61,11 @@ export default function App() {
   const [continuesUsed, setContinuesUsed] = useState(0);
   const [showRewardedModal, setShowRewardedModal] = useState(false);
 
-  const [activePowerUp, setActivePowerUp] = useState<PowerUpType | undefined>(undefined);
+  const [activePowerUp, setActivePowerUp] = useState<PowerUpType | undefined>(
+    undefined
+  );
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [isReplaying, setIsReplaying] = useState(false);
 
   useEffect(() => {
     adManager.init();
@@ -59,20 +79,23 @@ export default function App() {
   }, []);
 
   const handleStartGame = (levelId: number) => {
+    // Security check: Never allow access to locked sectors
+    if (levelId > unlockedLevel) {
+      return;
+    }
+    setIsReplaying(levelId < unlockedLevel);
+    setWallpaperIndex((prev) => getRandomWallpaperIndex(prev));
     const config = generateLevel(levelId);
     setCurrentLevelId(levelId);
     setLevelConfig(config);
-    if (levelId > unlockedLevel) {
-      setUnlockedLevel(levelId);
-      storageManager.saveUnlockedLevel(levelId);
-    }
+    setGameSessionId((prev) => prev + 1);
     setScore(0);
     setLives(1);
     setCombo(0);
     setContinuesUsed(0);
     setShowRewardedModal(false);
     setActivePowerUp(undefined);
-    setGameStatus('PLAYING');
+    setGameStatus("PLAYING");
   };
 
   const handleScoreChange = (newScore: number, newCombo: number) => {
@@ -98,43 +121,52 @@ export default function App() {
 
   const handleGameOver = () => {
     if (continuesUsed < ADS_CONFIG.MAX_CONTINUES_PER_SESSION) {
-      setGameStatus('PAUSED');
+      setGameStatus("PAUSED");
       setShowRewardedModal(true);
     } else {
       setShowRewardedModal(false);
       adManager.showInterstitialIfEligible();
-      setGameStatus('GAMEOVER');
+      setGameStatus("GAMEOVER");
     }
   };
 
   const handleAdRewardedSuccess = () => {
     if (continuesUsed < ADS_CONFIG.MAX_CONTINUES_PER_SESSION) {
       setLives(1);
-      setContinuesUsed((prev) => Math.min(ADS_CONFIG.MAX_CONTINUES_PER_SESSION, prev + 1));
+      setContinuesUsed((prev) =>
+        Math.min(ADS_CONFIG.MAX_CONTINUES_PER_SESSION, prev + 1)
+      );
       setShowRewardedModal(false);
-      setGameStatus('PLAYING');
+      setGameStatus("PLAYING");
     } else {
       setShowRewardedModal(false);
       adManager.showInterstitialIfEligible();
-      setGameStatus('GAMEOVER');
+      setGameStatus("GAMEOVER");
     }
   };
 
   const handleAdRewardedDecline = () => {
     setShowRewardedModal(false);
     adManager.showInterstitialIfEligible();
-    setGameStatus('GAMEOVER');
+    setGameStatus("GAMEOVER");
   };
 
   const handleVictory = () => {
-    setGameStatus('VICTORY');
-    const nextUnlocked = Math.min(50, Math.max(unlockedLevel, currentLevelId + 1));
+    setGameStatus("VICTORY");
+    const nextUnlocked = Math.min(
+      50,
+      Math.max(unlockedLevel, currentLevelId + 1)
+    );
     setUnlockedLevel(nextUnlocked);
     storageManager.saveUnlockedLevel(nextUnlocked);
   };
 
   const handleNextLevel = () => {
     const nextId = currentLevelId + 1;
+    if (nextId > 50) {
+      setGameStatus("MENU");
+      return;
+    }
     const nextUnlocked = Math.min(50, Math.max(unlockedLevel, nextId));
     setUnlockedLevel(nextUnlocked);
     storageManager.saveUnlockedLevel(nextUnlocked);
@@ -149,10 +181,10 @@ export default function App() {
   };
 
   const handlePauseToggle = () => {
-    if (gameStatus === 'PLAYING') {
-      setGameStatus('PAUSED');
-    } else if (gameStatus === 'PAUSED') {
-      setGameStatus('PLAYING');
+    if (gameStatus === "PLAYING") {
+      setGameStatus("PAUSED");
+    } else if (gameStatus === "PAUSED") {
+      setGameStatus("PLAYING");
     }
   };
 
@@ -175,9 +207,9 @@ export default function App() {
 
   return (
     <SafeAreaProvider style={styles.container} onLayout={onLayoutRootView}>
-      <StatusBar style="light" hidden={gameStatus === 'PLAYING'} />
+      <StatusBar style="light" hidden={gameStatus === "PLAYING"} />
 
-      {gameStatus === 'MENU' ? (
+      {gameStatus === "MENU" ? (
         <MenuOverlay
           onStartGame={handleStartGame}
           highScore={highScore}
@@ -186,10 +218,12 @@ export default function App() {
       ) : (
         <>
           <GameCanvas
+            key={`game_canvas_${currentLevelId}_${gameSessionId}`}
             level={levelConfig}
             gameStatus={gameStatus}
             score={score}
             lives={lives}
+            wallpaper={getWallpaperByIndex(wallpaperIndex)}
             onScoreChange={handleScoreChange}
             onLifeChange={handleLifeChange}
             onGameOver={handleGameOver}
@@ -211,13 +245,16 @@ export default function App() {
             onToggleSound={handleToggleSound}
             onPauseToggle={handlePauseToggle}
             onClose={() => {
-              const nextUnlocked = Math.min(50, Math.max(unlockedLevel, currentLevelId));
+              const nextUnlocked = Math.min(
+                50,
+                Math.max(unlockedLevel, currentLevelId)
+              );
               if (nextUnlocked > unlockedLevel) {
                 setUnlockedLevel(nextUnlocked);
                 storageManager.saveUnlockedLevel(nextUnlocked);
               }
               adManager.showInterstitialIfEligible();
-              setGameStatus('MENU');
+              setGameStatus("MENU");
             }}
           />
 
@@ -231,7 +268,7 @@ export default function App() {
             />
           )}
 
-          {gameStatus === 'GAMEOVER' && (
+          {gameStatus === "GAMEOVER" && (
             <GameOverModal
               score={score}
               highScore={highScore}
@@ -239,22 +276,28 @@ export default function App() {
               onRestart={() => handleStartGame(currentLevelId)}
               onMenu={() => {
                 adManager.showInterstitialIfEligible();
-                setGameStatus('MENU');
+                setGameStatus("MENU");
               }}
             />
           )}
 
-          {gameStatus === 'VICTORY' && (
+          {gameStatus === "VICTORY" && (
             <VictoryModal
               score={score}
               levelId={currentLevelId}
+              unlockedLevel={unlockedLevel}
+              isReplay={isReplaying}
               onNextLevel={handleNextLevel}
+              onResumeFrontier={() => handleStartGame(unlockedLevel)}
               onMenu={() => {
-                const nextUnlocked = Math.min(50, Math.max(unlockedLevel, currentLevelId + 1));
+                const nextUnlocked = Math.min(
+                  50,
+                  Math.max(unlockedLevel, currentLevelId + 1)
+                );
                 setUnlockedLevel(nextUnlocked);
                 storageManager.saveUnlockedLevel(nextUnlocked);
                 adManager.showInterstitialIfEligible();
-                setGameStatus('MENU');
+                setGameStatus("MENU");
               }}
             />
           )}
@@ -267,6 +310,6 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#030310',
+    backgroundColor: "#0B1020",
   },
 });

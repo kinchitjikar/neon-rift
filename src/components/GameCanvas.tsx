@@ -1,5 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
-import { StyleSheet, View, PanResponder, Dimensions, Text } from "react-native";
+import {
+  StyleSheet,
+  View,
+  PanResponder,
+  Dimensions,
+  Text,
+  Image,
+} from "react-native";
 import { GLView, ExpoWebGLRenderingContext } from "expo-gl";
 import * as THREE from "three";
 import {
@@ -17,6 +24,7 @@ import {
 import { soundManager } from "../audio/soundManager";
 import { adManager } from "../utils/adManager";
 import { COLORS } from "../config/theme";
+import { WallpaperItem, getWallpaperByIndex } from "../config/wallpapers";
 
 import { PerkSVGIcon } from "./PerkSVGIcon";
 
@@ -25,6 +33,7 @@ interface GameCanvasProps {
   gameStatus: GameStatus;
   score: number;
   lives: number;
+  wallpaper?: WallpaperItem;
   onScoreChange: (score: number, combo: number) => void;
   onLifeChange: (lives: number) => void;
   onGameOver: () => void;
@@ -37,7 +46,7 @@ const ARENA_BOUNDS = {
   left: -2.8,
   right: 2.8,
   top: 9.0,
-  bottom: -6.2,
+  bottom: -5.4,
 };
 
 const sharedCoinGeo = new THREE.CylinderGeometry(0.14, 0.14, 0.04, 12);
@@ -54,6 +63,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   gameStatus,
   score,
   lives,
+  wallpaper,
   onScoreChange,
   onLifeChange,
   onGameOver,
@@ -66,7 +76,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const ballsRef = useRef<Ball[]>([]);
   const paddleRef = useRef<Paddle>({
     x: 0,
-    y: -3.4,
+    y: -2.6,
     z: 0,
     width: 2.0,
     height: 0.45,
@@ -78,6 +88,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const particlesRef = useRef<Particle[]>([]);
   const activeEffectsRef = useRef<{ [key in PowerUpType]?: number }>({});
   const shakeIntensityRef = useRef(0);
+
+  // Lifecycle, animation frame & cleanup refs to prevent ghost loops and timer leaks
+  const isMountedRef = useRef(true);
+  const animationFrameIdRef = useRef<number | null>(null);
+  const respawnTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastFrameTimeRef = useRef<number>(0);
 
   // CRITICAL FIX: Initialization & Victory triggers to prevent repeated modal popups
   const isBallInitializedRef = useRef(false);
@@ -91,6 +107,22 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const sceneRef = useRef<THREE.Scene | null>(null);
   const brickMeshMapRef = useRef<Map<string, THREE.Group>>(new Map());
   const powerUpMeshMapRef = useRef<Map<string, THREE.Group>>(new Map());
+
+  // Mount/Unmount cleanup to cancel active RAF loops and clear pending timers
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (animationFrameIdRef.current !== null) {
+        cancelAnimationFrame(animationFrameIdRef.current);
+        animationFrameIdRef.current = null;
+      }
+      if (respawnTimeoutRef.current !== null) {
+        clearTimeout(respawnTimeoutRef.current);
+        respawnTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Floating text & coin animations
   const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([]);
@@ -149,6 +181,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   };
 
   const resetBallAndPaddle = () => {
+    if (respawnTimeoutRef.current !== null) {
+      clearTimeout(respawnTimeoutRef.current);
+      respawnTimeoutRef.current = null;
+    }
     activeEffectsRef.current = {};
     powerUpsRef.current = [];
     particlesRef.current = [];
@@ -166,6 +202,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     comboRef.current = 0;
     lastLaunchTimeRef.current = 0;
     speedBoostStepRef.current = 0;
+    lastFrameTimeRef.current = 0;
     paddleRef.current.x = 0;
     paddleRef.current.targetX = 0;
     paddleRef.current.width = 2.0;
@@ -183,7 +220,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         vy: 0,
         vz: 0,
         radius: 0.17,
-        speed: 0.10,
+        speed: 0.12,
       },
     ];
 
@@ -199,11 +236,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       setRespawnText(null);
       lastLaunchTimeRef.current = Date.now();
       speedBoostStepRef.current = 0;
-      const baseSpeed = 0.10;
+      lastFrameTimeRef.current = Date.now();
+      const isEndgame =
+        bricksRef.current.length <= 10 && bricksRef.current.length > 0;
+      const baseSpeed = isEndgame ? 0.20 : 0.12;
       const angle = (Math.PI / 4) * (Math.random() > 0.5 ? 1 : -1);
       ballsRef.current.forEach((ball) => {
         ball.vx = Math.sin(angle) * baseSpeed;
         ball.vy = Math.cos(angle) * baseSpeed;
+        ball.speed = baseSpeed;
       });
       soundManager.playHitPaddle();
     }
@@ -213,7 +254,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
       onPanResponderGrant: () => {
         paddleRef.current.startX = paddleRef.current.targetX;
         launchBallIfStuck();
@@ -347,7 +390,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const { drawingBufferWidth: width, drawingBufferHeight: height } = gl;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0b1020);
+    // Scene background left unset (null) to allow transparent WebGL rendering over ImageBackground
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(54, width / height, 0.1, 100);
@@ -367,10 +410,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       } as unknown as HTMLCanvasElement,
       context: gl,
       antialias: true,
-      alpha: false,
+      alpha: true,
     });
+    renderer.setClearColor(0x000000, 0);
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
     const ambientLight = new THREE.AmbientLight(0xf8fafc, 0.85);
     scene.add(ambientLight);
@@ -382,62 +425,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const cyanPointLight = new THREE.PointLight(0x22d3ee, 1.5, 20);
     cyanPointLight.position.set(-4, -2, 4);
     scene.add(cyanPointLight);
-
-    // 3D Saturn Planet & Ring in Outer Space Background
-    const saturnGroup = new THREE.Group();
-    saturnGroup.position.set(3.2, 5.2, -8.5);
-
-    const saturnGeo = new THREE.SphereGeometry(2.0, 32, 32);
-    const saturnMat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
-      emissive: 0x0f172a,
-      emissiveIntensity: 0.5,
-      metalness: 0.8,
-      roughness: 0.4,
-    });
-    const saturnMesh = new THREE.Mesh(saturnGeo, saturnMat);
-    saturnGroup.add(saturnMesh);
-
-    const saturnRingGeo = new THREE.RingGeometry(2.6, 4.0, 64);
-    const saturnRingMat = new THREE.MeshStandardMaterial({
-      color: 0x94a3b8,
-      emissive: 0x334155,
-      emissiveIntensity: 0.4,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.45,
-    });
-    const saturnRing = new THREE.Mesh(saturnRingGeo, saturnRingMat);
-    saturnRing.rotation.x = Math.PI / 2.6;
-    saturnRing.rotation.y = Math.PI / 9;
-    saturnGroup.add(saturnRing);
-
-    scene.add(saturnGroup);
-
-    // Subtle Far Background Starfield
-    const starsGroup = new THREE.Group();
-    const starGeo = new THREE.BufferGeometry();
-    const starPositions = new Float32Array(80 * 3);
-
-    for (let i = 0; i < 80; i++) {
-      starPositions[i * 3] = (Math.random() - 0.5) * 20;
-      starPositions[i * 3 + 1] = (Math.random() - 0.5) * 25;
-      starPositions[i * 3 + 2] = -12 - Math.random() * 10;
-    }
-
-    starGeo.setAttribute(
-      "position",
-      new THREE.BufferAttribute(starPositions, 3)
-    );
-    const starMat = new THREE.PointsMaterial({
-      color: 0xf8fafc,
-      size: 0.1,
-      transparent: true,
-      opacity: 0.35,
-    });
-    const starPoints = new THREE.Points(starGeo, starMat);
-    starsGroup.add(starPoints);
-    scene.add(starsGroup);
 
     // Portal Energy Rings
     const ringGeo = new THREE.TorusGeometry(0.55, 0.09, 16, 32);
@@ -495,7 +482,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       opacity: 0.0,
     });
     const shieldMesh = new THREE.Mesh(shieldGeometry, shieldMaterial);
-    shieldMesh.position.set(0, -5.9, 0);
+    shieldMesh.position.set(0, -5.1, 0);
     scene.add(shieldMesh);
 
     // Metallic Capsule Paddle
@@ -776,21 +763,39 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         }
       });
       bricksRef.current = remaining;
+
+      // When remaining bricks drop to 10 or fewer, immediately scale ball speed to 0.20
+      if (remaining.length <= 10 && remaining.length > 0) {
+        ballsRef.current.forEach((b) => {
+          const spd = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+          if (spd > 0 && Math.abs(spd - 0.20) > 0.001) {
+            const ratio = 0.20 / spd;
+            b.vx *= ratio;
+            b.vy *= ratio;
+            b.speed = 0.20;
+          }
+        });
+      }
     };
 
     // MAIN RENDER & PHYSICS LOOP
-    let animationFrameId: number;
-
     const render = () => {
-      animationFrameId = requestAnimationFrame(render);
+      if (!isMountedRef.current) return;
+      animationFrameIdRef.current = requestAnimationFrame(render);
 
-      leftRing.rotation.z += 0.02;
-      rightRing.rotation.z += 0.02;
+      const now = Date.now();
+      const deltaMs =
+        lastFrameTimeRef.current > 0 ? now - lastFrameTimeRef.current : 16.667;
+      lastFrameTimeRef.current = now;
+      const timeScale = Math.min(2.0, Math.max(0.5, deltaMs / 16.667));
+
+      leftRing.rotation.z += 0.02 * timeScale;
+      rightRing.rotation.z += 0.02 * timeScale;
 
       // Update blast shockwave ring
       if (blastRingOpacity > 0.01) {
-        blastRingScale += 0.25;
-        blastRingOpacity -= 0.06;
+        blastRingScale += 0.25 * timeScale;
+        blastRingOpacity -= 0.06 * timeScale;
         blastRingMesh.scale.set(blastRingScale, blastRingScale, 1);
         blastRingMat.opacity = Math.max(0, blastRingOpacity);
       } else if (blastRingMat.opacity > 0) {
@@ -811,14 +816,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         const p = paddleRef.current;
         const maxBound = getMaxPaddleX(p.width);
         p.targetX = Math.max(-maxBound, Math.min(maxBound, p.targetX));
-        p.x += (p.targetX - p.x) * 0.55;
+        p.x += (p.targetX - p.x) * Math.min(1.0, 0.55 * timeScale);
 
         paddleGroup.position.set(p.x, p.y, p.z);
         centerBodyMesh.scale.set(p.width, 1, 1);
         leftCap.position.set(-(p.width / 2), 0, 0);
         rightCap.position.set(p.width / 2, 0, 0);
 
-        const now = Date.now();
         const isShieldActive = !!(
           activeEffectsRef.current["shield"] &&
           activeEffectsRef.current["shield"]! > now
@@ -842,53 +846,83 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
         const remainingPowerUps: DroppedPowerUp[] = [];
         powerUpsRef.current.forEach((pup) => {
-          pup.y += pup.vy;
+          pup.y += pup.vy * timeScale;
 
           const halfPW = p.width / 2;
           const halfPH = p.height / 2;
 
           // Check if powerup lands directly on paddle
           const isHittingPaddle =
-            pup.y <= p.y + halfPH + 0.2 &&
-            pup.y >= p.y - halfPH &&
-            pup.x >= p.x - halfPW - 0.2 &&
-            pup.x <= p.x + halfPW + 0.2;
+            pup.y <= p.y + halfPH + 0.25 &&
+            pup.y >= p.y - halfPH - 0.20 &&
+            pup.x >= p.x - halfPW - 0.25 &&
+            pup.x <= p.x + halfPW + 0.25;
 
           if (isHittingPaddle) {
             soundManager.playPowerUp();
             activatePowerUp(pup.type);
-            spawnParticles(pup.x, pup.y, pup.color, 16);
+            spawnParticles(pup.x, p.y + halfPH, pup.color, 20);
             addFloatingText(
               `${pup.type.toUpperCase().replace("_", " ")}!`,
               pup.x,
-              pup.y,
+              p.y + halfPH,
               pup.color
             );
-          } else if (pup.y > p.y - halfPH) {
-            // Still above paddle height, keep falling
-            remainingPowerUps.push(pup);
-          }
-          // If pup falls below paddle without hitting it, it is discarded!
-        });
-        // Time-Based Progressive Speed Escalation (Increases every 6 seconds from 0.10 up to 0.18)
-        if (!isBallStuckRef.current && lastLaunchTimeRef.current > 0) {
-          const elapsedSec = (Date.now() - lastLaunchTimeRef.current) / 1000;
-          const currentStep = Math.floor(elapsedSec / 6);
-          const targetMinSpeed = Math.min(0.18, 0.10 + currentStep * 0.015);
-
-          if (currentStep > speedBoostStepRef.current) {
-            speedBoostStepRef.current = currentStep;
-            // addFloatingText("SPEED UP ⚡", p.x, p.y + 0.8, "#FACC15");
-          }
-
-          ballsRef.current.forEach((b) => {
-            const curSpd = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
-            if (curSpd > 0 && curSpd < targetMinSpeed) {
-              const ratio = targetMinSpeed / curSpd;
-              b.vx *= ratio;
-              b.vy *= ratio;
+            // Immediately remove 3D mesh from Three.js scene so animation halts right at paddle
+            const group = powerUpMeshMap.get(pup.id);
+            if (group) {
+              scene.remove(group);
+              powerUpMeshMap.delete(pup.id);
             }
-          });
+          } else if (pup.y > -5.5) {
+            // Still in active play area, keep falling
+            remainingPowerUps.push(pup);
+          } else {
+            // Missed powerup fell below screen bounds, remove mesh
+            const group = powerUpMeshMap.get(pup.id);
+            if (group) {
+              scene.remove(group);
+              powerUpMeshMap.delete(pup.id);
+            }
+          }
+        });
+        powerUpsRef.current = remainingPowerUps;
+
+        // Ball Speed Logic: Check for final 10 bricks endgame vs time-based escalation
+        const isEndgame =
+          bricksRef.current.length <= 10 && bricksRef.current.length > 0;
+
+        if (!isBallStuckRef.current && lastLaunchTimeRef.current > 0) {
+          if (isEndgame) {
+            // Final 10 bricks threshold: lock speed to 0.20
+            ballsRef.current.forEach((b) => {
+              const curSpd = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+              if (curSpd > 0 && Math.abs(curSpd - 0.20) > 0.001) {
+                const ratio = 0.20 / curSpd;
+                b.vx *= ratio;
+                b.vy *= ratio;
+              }
+              b.speed = 0.20;
+            });
+          } else {
+            // Time-Based Progressive Speed Escalation (Increases every 5 seconds from 0.12 up to 0.18)
+            const elapsedSec = (Date.now() - lastLaunchTimeRef.current) / 1000;
+            const currentStep = Math.floor(elapsedSec / 5);
+            const targetMinSpeed = Math.min(0.18, 0.12 + currentStep * 0.012);
+
+            if (currentStep > speedBoostStepRef.current) {
+              speedBoostStepRef.current = currentStep;
+            }
+
+            ballsRef.current.forEach((b) => {
+              const curSpd = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+              if (curSpd > 0 && curSpd < targetMinSpeed) {
+                const ratio = targetMinSpeed / curSpd;
+                b.vx *= ratio;
+                b.vy *= ratio;
+              }
+            });
+          }
         }
 
         const activeBalls: Ball[] = [];
@@ -901,8 +935,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             return;
           }
 
-          let nx = ball.x + ball.vx;
-          let ny = ball.y + ball.vy;
+          let nx = ball.x + ball.vx * timeScale;
+          let ny = ball.y + ball.vy * timeScale;
 
           // Wall Collisions
           if (nx - ball.radius <= ARENA_BOUNDS.left) {
@@ -937,17 +971,27 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             const maxAngle = (Math.PI / 180) * 60;
             const bounceAngle = hitFactor * maxAngle;
 
-            const elapsedSec =
-              lastLaunchTimeRef.current > 0
-                ? (Date.now() - lastLaunchTimeRef.current) / 1000
-                : 0;
-            const currentStep = Math.floor(elapsedSec / 6);
-            const targetMinSpeed = Math.min(0.18, 0.10 + currentStep * 0.015);
+            const isEndgame =
+              bricksRef.current.length <= 10 && bricksRef.current.length > 0;
 
-            const curSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-            const speed = Math.max(targetMinSpeed, curSpeed);
+            let speed: number;
+            if (isEndgame) {
+              speed = 0.20;
+            } else {
+              const elapsedSec =
+                lastLaunchTimeRef.current > 0
+                  ? (Date.now() - lastLaunchTimeRef.current) / 1000
+                  : 0;
+              const currentStep = Math.floor(elapsedSec / 5);
+              const targetMinSpeed = Math.min(0.18, 0.12 + currentStep * 0.012);
+
+              const curSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+              speed = Math.min(0.18, Math.max(targetMinSpeed, curSpeed));
+            }
+
             ball.vx = speed * Math.sin(bounceAngle);
             ball.vy = speed * Math.cos(bounceAngle);
+            ball.speed = speed;
 
             soundManager.playHitPaddle();
             spawnParticles(nx, ny, "#FFE600", 8);
@@ -1047,23 +1091,30 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                 }
               }
 
-              // Progressive time & hit ball acceleration (0.10 -> 0.18)
-              const elapsedSec =
-                lastLaunchTimeRef.current > 0
-                  ? (Date.now() - lastLaunchTimeRef.current) / 1000
-                  : 0;
-              const currentStep = Math.floor(elapsedSec / 6);
-              const targetMinSpeed = Math.min(0.18, 0.10 + currentStep * 0.015);
+              // Ball bounce speed calculation (0.20 for final 10 bricks, else 0.12 -> 0.18)
+              const isEndgame =
+                bricksRef.current.length <= 20 && bricksRef.current.length > 0;
 
               const currentSpeed = Math.sqrt(
                 ball.vx * ball.vx + ball.vy * ball.vy
               );
-              const maxSpeedCap = Math.min(0.18, targetMinSpeed + 0.03);
-              const newSpeed = Math.min(
-                maxSpeedCap,
-                Math.max(targetMinSpeed, currentSpeed + 0.003)
-              );
+              let newSpeed: number;
+              if (isEndgame) {
+                newSpeed = 0.25;
+              } else {
+                const elapsedSec =
+                  lastLaunchTimeRef.current > 0
+                    ? (Date.now() - lastLaunchTimeRef.current) / 1000
+                    : 0;
+                const currentStep = Math.floor(elapsedSec / 5);
+                const targetMinSpeed = Math.min(0.18, 0.12 + currentStep * 0.012);
+                newSpeed = Math.min(
+                  0.18,
+                  Math.max(targetMinSpeed, currentSpeed + 0.004)
+                );
+              }
               const speedRatio = newSpeed / (currentSpeed || 1);
+              ball.speed = newSpeed;
 
               const overlapX = halfW + ball.radius - Math.abs(nx - b.x);
               const overlapY = halfH + ball.radius - Math.abs(ny - b.y);
@@ -1084,6 +1135,19 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             bricksRef.current = bricksRef.current.filter(
               (bk) => !deadBrickIds.has(bk.id)
             );
+
+            // Instant speed adjustment if entering the final 10 bricks threshold
+            if (bricksRef.current.length <= 10 && bricksRef.current.length > 0) {
+              ballsRef.current.forEach((b) => {
+                const spd = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+                if (spd > 0 && Math.abs(spd - 0.20) > 0.001) {
+                  const ratio = 0.20 / spd;
+                  b.vx *= ratio;
+                  b.vy *= ratio;
+                  b.speed = 0.20;
+                }
+              });
+            }
           }
 
           ball.x = nx;
@@ -1103,15 +1167,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           comboRef.current = 0;
           const newLives = livesRef.current - 1;
           onLifeChange(newLives);
-          addFloatingText(`⚠️ BALL LOST!`, 0, -4.5, "#FF0055");
+          addFloatingText(`⚠️ BALL LOST!`, 0, -3.8, "#FF0055");
 
           if (newLives <= 0) {
             soundManager.playGameOver();
             onGameOver();
           } else {
             setRespawnText("GET READY...");
-            setTimeout(() => {
-              resetBallAndPaddle();
+            if (respawnTimeoutRef.current) {
+              clearTimeout(respawnTimeoutRef.current);
+            }
+            respawnTimeoutRef.current = setTimeout(() => {
+              respawnTimeoutRef.current = null;
+              if (isMountedRef.current) {
+                resetBallAndPaddle();
+              }
             }, 1000);
           }
         }
@@ -1165,7 +1235,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     render();
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      if (animationFrameIdRef.current !== null) {
+        cancelAnimationFrame(animationFrameIdRef.current);
+        animationFrameIdRef.current = null;
+      }
     };
   };
 
@@ -1183,8 +1256,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       // Cap active multi-balls on screen to max 3 total balls
       if (ballsRef.current.length > 0 && ballsRef.current.length < 3) {
         const mainBall = ballsRef.current[0];
-        const baseVx = Math.abs(mainBall.vx) > 0.02 ? mainBall.vx : 0.08;
-        const baseVy = Math.abs(mainBall.vy) > 0.02 ? mainBall.vy : 0.10;
+        const isEndgame =
+          bricksRef.current.length <= 10 && bricksRef.current.length > 0;
+        const ballSpeed = isEndgame ? 0.20 : mainBall.speed;
+        const curSpd =
+          Math.sqrt(mainBall.vx * mainBall.vx + mainBall.vy * mainBall.vy) || 0.12;
+        const speedScale = ballSpeed / curSpd;
+        const baseVx =
+          (Math.abs(mainBall.vx) > 0.02 ? mainBall.vx : 0.08) * speedScale;
+        const baseVy =
+          (Math.abs(mainBall.vy) > 0.02 ? mainBall.vy : 0.10) * speedScale;
 
         ballsRef.current.push({
           id: `ball_m1_${Math.random()}`,
@@ -1195,7 +1276,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           vy: Math.abs(baseVy),
           vz: 0,
           radius: 0.17,
-          speed: mainBall.speed,
+          speed: ballSpeed,
         });
 
         if (ballsRef.current.length < 3) {
@@ -1208,7 +1289,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             vy: -Math.abs(baseVy) * 0.8,
             vz: 0,
             radius: 0.17,
-            speed: mainBall.speed,
+            speed: ballSpeed,
           });
         }
       }
@@ -1238,24 +1319,36 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   };
 
   useEffect(() => {
-    if (floatingTexts.length === 0) return;
     const interval = setInterval(() => {
-      setFloatingTexts((prev) =>
-        prev
+      setFloatingTexts((prev) => {
+        if (prev.length === 0) return prev;
+        return prev
           .map((ft) => ({
             ...ft,
             y: ft.y - 1.5,
             alpha: ft.alpha - 0.04,
             scale: ft.scale + 0.02,
           }))
-          .filter((ft) => ft.alpha > 0)
-      );
+          .filter((ft) => ft.alpha > 0);
+      });
     }, 16);
     return () => clearInterval(interval);
-  }, [floatingTexts]);
+  }, []);
+
+  const activeWallpaper = wallpaper || getWallpaperByIndex(0);
 
   return (
     <View style={styles.container} {...panResponder.panHandlers}>
+      {/* Background Wallpaper Image */}
+      <Image
+        source={activeWallpaper.source}
+        style={styles.backgroundImage}
+        resizeMode="cover"
+      />
+
+      {/* Subtle Dark Vignette Tint: guarantees maximum contrast so ball and bricks remain 100% visible */}
+      <View style={styles.contrastOverlay} pointerEvents="none" />
+
       <GLView style={styles.glView} onContextCreate={onContextCreate} />
 
       {/* Respawn Countdown Indicator */}
@@ -1293,8 +1386,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.base,
   },
+  backgroundImage: {
+    ...StyleSheet.absoluteFill,
+    width: "100%",
+    height: "100%",
+  },
+  contrastOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "rgba(11, 16, 32, 0.45)",
+  },
   glView: {
     flex: 1,
+    backgroundColor: "transparent",
   },
   floatingText: {
     position: "absolute",

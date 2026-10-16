@@ -234,7 +234,7 @@ export function generateEndlessRandomLevel(levelId: number): LevelConfig {
   const bD = 0.35;
   const sX = 0.04;
   const sY = 0.04;
-  const startY = 6.6;
+  const startY = 7.7;
 
   const basePlanet = PLANETS[(levelId - 1) % PLANETS.length];
   const planetName = `${basePlanet} (Endless Core)`;
@@ -337,7 +337,7 @@ export function generateLevel(levelId: number): LevelConfig {
   const bD = 0.35;
   const sX = 0.04;
   const sY = 0.04;
-  const startY = 6.6;
+  const startY = 7.7;
 
   const planetIdx = (levelId - 1) % PLANETS.length;
   const planetName = PLANETS[planetIdx];
