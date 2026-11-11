@@ -2,7 +2,7 @@
   "expo": {
     "name": "Orbit Breaker",
     "slug": "orbit-breaker",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/orbit_breaker_icon.jpg",
     "userInterfaceStyle": "dark",
@@ -21,7 +21,7 @@
         "backgroundColor": "#0B1020"
       },
       "package": "com.dreamcall.orbitbreaker",
-      "versionCode": 1,
+      "versionCode": 3,
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -33,7 +33,7 @@
         {
           "android": {
             "compileSdkVersion": 36,
-            "targetSdkVersion": 35,
+            "targetSdkVersion": 36,
             "minSdkVersion": 24,
             "buildToolsVersion": "36.0.0",
             "enableMinifyInReleaseBuilds": true,

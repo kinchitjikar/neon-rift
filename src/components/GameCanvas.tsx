@@ -25,6 +25,8 @@ import { soundManager } from "../audio/soundManager";
 import { adManager } from "../utils/adManager";
 import { COLORS } from "../config/theme";
 import { WallpaperItem, getWallpaperByIndex } from "../config/wallpapers";
+import * as Haptics from "expo-haptics";
+import { FEATURES } from "../config/features";
 
 import { PerkSVGIcon } from "./PerkSVGIcon";
 
@@ -107,6 +109,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const sceneRef = useRef<THREE.Scene | null>(null);
   const brickMeshMapRef = useRef<Map<string, THREE.Group>>(new Map());
   const powerUpMeshMapRef = useRef<Map<string, THREE.Group>>(new Map());
+  const paddleVelocityRef = useRef<number>(0);
 
   // Mount/Unmount cleanup to cancel active RAF loops and clear pending timers
   useEffect(() => {
@@ -221,6 +224,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         vz: 0,
         radius: 0.17,
         speed: 0.12,
+        spin: 0,
       },
     ];
 
@@ -270,6 +274,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         let newX = (paddleRef.current.startX || 0) + deltaX;
         newX = Math.max(-maxBound, Math.min(maxBound, newX));
         paddleRef.current.targetX = newX;
+      },
+      onPanResponderRelease: () => {
+        launchBallIfStuck();
       },
     })
   ).current;
@@ -816,7 +823,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         const p = paddleRef.current;
         const maxBound = getMaxPaddleX(p.width);
         p.targetX = Math.max(-maxBound, Math.min(maxBound, p.targetX));
+        const prevPaddleX = p.x;
         p.x += (p.targetX - p.x) * Math.min(1.0, 0.55 * timeScale);
+        paddleVelocityRef.current = (p.x - prevPaddleX) / (timeScale || 1);
 
         paddleGroup.position.set(p.x, p.y, p.z);
         centerBodyMesh.scale.set(p.width, 1, 1);
@@ -935,6 +944,42 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             return;
           }
 
+          // Option A: 1. Precision Curve Strike Magnus Curvature
+          if (
+            FEATURES.ENABLE_CURVE_STRIKE &&
+            ball.spin &&
+            Math.abs(ball.spin) > 0.01
+          ) {
+            const curSpd =
+              Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy) || ball.speed;
+            const perpX = -ball.vy / curSpd;
+            const perpY = ball.vx / curSpd;
+            const curveMagnitude = ball.spin * 0.007 * timeScale;
+            ball.vx += perpX * curveMagnitude;
+            ball.vy += perpY * curveMagnitude;
+
+            // Renormalize velocity to strictly preserve ball speed rules
+            const newSpd =
+              Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy) || ball.speed;
+            const scale = curSpd / newSpd;
+            ball.vx *= scale;
+            ball.vy *= scale;
+
+            ball.spin *= Math.pow(0.965, timeScale);
+            if (Math.abs(ball.spin) < 0.01) {
+              ball.spin = 0;
+            }
+
+            if (Math.random() < 0.25) {
+              spawnParticles(
+                ball.x,
+                ball.y,
+                ball.spin > 0 ? "#22D3EE" : "#F472B6",
+                1
+              );
+            }
+          }
+
           let nx = ball.x + ball.vx * timeScale;
           let ny = ball.y + ball.vy * timeScale;
 
@@ -992,6 +1037,38 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             ball.vx = speed * Math.sin(bounceAngle);
             ball.vy = speed * Math.cos(bounceAngle);
             ball.speed = speed;
+
+            // Option A: Precision Curve Strike Spin Transfer
+            if (FEATURES.ENABLE_CURVE_STRIKE) {
+              const pVel = paddleVelocityRef.current;
+              if (Math.abs(pVel) > 0.035) {
+                const spinForce = Math.max(-1.0, Math.min(1.0, pVel * 6.5));
+                ball.spin = spinForce;
+                spawnParticles(
+                  nx,
+                  ny,
+                  spinForce > 0 ? "#22D3EE" : "#F472B6",
+                  14
+                );
+                try {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+                    () => {}
+                  );
+                } catch {
+                  // Fallback
+                }
+                if (Math.abs(spinForce) > 0.45) {
+                  addFloatingText(
+                    "SPIN! 💫",
+                    nx,
+                    ny + 0.3,
+                    spinForce > 0 ? "#22D3EE" : "#F472B6"
+                  );
+                }
+              } else {
+                ball.spin = 0;
+              }
+            }
 
             soundManager.playHitPaddle();
             spawnParticles(nx, ny, "#FFE600", 8);

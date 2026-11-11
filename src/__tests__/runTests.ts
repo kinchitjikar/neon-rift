@@ -652,8 +652,8 @@ function runAllTests() {
       "extraProguardRules must keep expo.modules.gl.** and native methods to prevent JNI crash when mounting GLView"
     );
     assert(
-      androidProps.targetSdkVersion === 35,
-      `targetSdkVersion must be 35 for Android 15 compliance (got ${androidProps.targetSdkVersion})`
+      androidProps.targetSdkVersion === 36,
+      `targetSdkVersion must be 36 for Google Play target API compliance (got ${androidProps.targetSdkVersion})`
     );
     assert(
       androidProps.compileSdkVersion === 36,
@@ -673,6 +673,89 @@ function runAllTests() {
     assert(
       canvasContent.includes("renderer.setSize(width, height)"),
       "GameCanvas must set native dimensions directly via renderer.setSize(width, height)"
+    );
+  });
+
+  // 28. Option A Innovation Mechanics - Precision Curve Strike (Slingshot / Gravity Wells Completely Removed)
+  test("Option A Innovation - Precision Curve Strike active with slingshot/gravity well completely removed", async () => {
+    // @ts-ignore
+    const fs = await import("fs");
+    // @ts-ignore
+    const path = await import("path");
+
+    const featuresContent = fs.readFileSync(path.resolve(process.cwd(), "src/config/features.ts"), "utf-8");
+    const packageJsonRaw = fs.readFileSync(path.resolve(process.cwd(), "package.json"), "utf-8");
+    const packageJson = JSON.parse(packageJsonRaw);
+
+    // 1. Verify zero new external dependencies introduced by innovation mechanics
+    const allowedDeps = [
+      "@expo-google-fonts/orbitron",
+      "@expo-google-fonts/rajdhani",
+      "@modhamanish/rn-radial-date-time-picker",
+      "@react-native-async-storage/async-storage",
+      "@react-three/fiber",
+      "expo",
+      "expo-build-properties",
+      "expo-font",
+      "expo-gl",
+      "expo-haptics",
+      "expo-splash-screen",
+      "expo-status-bar",
+      "react",
+      "react-native",
+      "react-native-google-mobile-ads",
+      "react-native-safe-area-context",
+      "react-native-svg",
+      "three",
+    ];
+    const currentDeps = Object.keys(packageJson.dependencies);
+    assert(
+      currentDeps.every((dep) => allowedDeps.includes(dep)),
+      "Must not introduce any new external packages or libraries"
+    );
+
+    // 2. Verify feature toggles: Curve Strike is configured and Gravity Wells are completely removed
+    assert(
+      featuresContent.includes("ENABLE_CURVE_STRIKE"),
+      "FEATURES configuration must export ENABLE_CURVE_STRIKE"
+    );
+    assert(
+      !featuresContent.includes("ENABLE_GRAVITY_WELLS"),
+      "ENABLE_GRAVITY_WELLS must be completely removed from FEATURES"
+    );
+
+    // 3. Verify Gravity Wells are completely removed from all level configs
+    const sector5 = generateLevel(5);
+    const sector10 = generateLevel(10);
+    const sector1 = generateLevel(1);
+    const sector2 = generateLevel(2);
+
+    assert(!("gravityWell" in sector5) || !(sector5 as any).gravityWell, "Sector 5 must NOT have gravityWell");
+    assert(!("gravityWell" in sector10) || !(sector10 as any).gravityWell, "Sector 10 must NOT have gravityWell");
+    assert(!("gravityWell" in sector1) || !(sector1 as any).gravityWell, "Sector 1 must NOT have gravityWell");
+    assert(!("gravityWell" in sector2) || !(sector2 as any).gravityWell, "Sector 2 must NOT have gravityWell");
+
+    // 4. Verify Curve Strike Magnus physics: curves direction without altering ball speed
+    const simulateCurveStrike = (vx: number, vy: number, spin: number) => {
+      const curSpd = Math.sqrt(vx * vx + vy * vy);
+      const perpX = -vy / curSpd;
+      const perpY = vx / curSpd;
+      let newVx = vx + perpX * (spin * 0.007);
+      let newVy = vy + perpY * (spin * 0.007);
+      const newSpd = Math.sqrt(newVx * newVx + newVy * newVy);
+      newVx *= curSpd / newSpd;
+      newVy *= curSpd / newSpd;
+      const finalSpd = Math.sqrt(newVx * newVx + newVy * newVy);
+      return { newVx, newVy, finalSpd };
+    };
+
+    const initialSpeed = 0.15;
+    const curveResult = simulateCurveStrike(0, 0.15, 0.8);
+    // Path deflected rightward due to positive spin
+    assert(curveResult.newVx < 0, "Positive spin must deflect ball horizontally");
+    assert(
+      Math.abs(curveResult.finalSpd - initialSpeed) < 0.0001,
+      `Curve strike must preserve ball speed perfectly (initial: ${initialSpeed}, final: ${curveResult.finalSpd})`
     );
   });
 

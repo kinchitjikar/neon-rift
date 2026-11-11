@@ -44,6 +44,7 @@ export interface Ball {
   radius: number;
   speed: number;
   isFireball?: boolean;
+  spin?: number;
 }
 
 export interface Paddle {
