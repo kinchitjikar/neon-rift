@@ -68,34 +68,6 @@ Every sector features a deliberate mix of interactive 3D voxel bricks:
 - **Native Haptic Engine**: Tactile impact impulses integrated via `expo-haptics`.
 
 ---
-
-## 📸 Screenshots Showcase
-
-<div align="center">
-  <table>
-    <tr>
-      <td align="center" width="25%">
-        <img src="./assets/playstore/screenshots/screenshot_1_action_1080x1920.png" width="100%" alt="3D Arcade Action" /><br/>
-        <b>3D Arcade Action</b>
-      </td>
-      <td align="center" width="25%">
-        <img src="./assets/playstore/screenshots/screenshot_2_curve_strike_1080x1920.png" width="100%" alt="Curve Strike Physics" /><br/>
-        <b>Precision Curve Strike</b>
-      </td>
-      <td align="center" width="25%">
-        <img src="./assets/playstore/screenshots/screenshot_3_perks_1080x1920.png" width="100%" alt="Tactical Perks" /><br/>
-        <b>Tactical Power-Ups</b>
-      </td>
-      <td align="center" width="25%">
-        <img src="./assets/playstore/screenshots/screenshot_4_sectors_1080x1920.png" width="100%" alt="50 Cosmic Sectors" /><br/>
-        <b>50 Cosmic Sectors</b>
-      </td>
-    </tr>
-  </table>
-</div>
-
----
-
 ## 🏗️ Architecture & Project Structure
 
 The project adheres to clean modular React Native patterns, decoupling 3D rendering loops, game state engines, audio synthesis, and persistent storage:
